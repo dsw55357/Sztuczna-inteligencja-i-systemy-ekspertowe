@@ -15,6 +15,9 @@ import math
 import random
 import sys
 
+from ant_simulation import build_probability_table, distance, roulette_select
+from simulation_state import StepState, ProbabilityRow
+
 pygame.init()
 
 # =========================
@@ -147,116 +150,6 @@ initial_pheromone = 1.0
 # Dla powtarzalności wyników
 random.seed(42)
 
-# =========================
-# Funkcje pomocnicze
-# Odległość jest:
-# kosztem przejścia między punktami,
-# podstawą do wyznaczenia heurystyki:
-# eta = 1/d,
-# Czyli im bliżej punkt leży, tym większa heurystyka i zwykle większe prawdopodobieństwo wyboru.
-# =========================
-def distance(p1, p2):
-    x1, y1 = points[p1]
-    x2, y2 = points[p2]
-    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-
-# =========================
-# Główna logika mrówki
-# Cel funkcji:
-# Dla aktualnego miasta i zbioru miast nieodwiedzonych obliczyć:
-# odległości,
-# heurystyki,
-# wagi,
-# prawdopodobieństwa wyboru,
-# sumy skumulowane do ruletki.
-# Parametry:
-# current — aktualne położenie mrówki,
-# unvisited — zbiór punktów, których mrówka jeszcze nie odwiedziła,
-# pheromone=1.0 — przyjęta wartość początkowego feromonu.
-# =========================
-def build_probability_table(current, unvisited, pheromone=1.0):
-    """
-    Zwraca listę słowników z obliczeniami dla kandydatów:
-    d, eta, tau^alpha, eta^beta, weight, p, cumulative
-    """
-    # Będzie tu przechowywana tabela kandydatów.
-    # Każdy element listy rows to jeden słownik z informacjami o danym mieście.
-    rows = []
-
-    # liczenie wag
-    # obliczenie parametrów dla każdego kandydata
-    for city in unvisited:
-        # obliczanie odległości i heurystyki
-        # Dla każdego nieodwiedzonego miasta liczymy:
-        # odległość d do aktualnego miasta,
-        d = distance(current, city) # odległość
-        # heurystyka eta = 1/d,
-        eta = 1.0 / d
-        # wpływ feromonu
-        tau_alpha = pheromone ** alpha 
-        # wpływ heurystyki
-        eta_beta = eta ** beta 
-        # waga przejścia
-        # Ta wartość jeszcze nie jest prawdopodobieństwem, ale mówi, jak atrakcyjny jest ruch do danego miasta.
-        weight = tau_alpha * eta_beta # waga kandydata do wyboru
-
-        # zapis wyników do tabeli
-        # Każdy kandydat zostaje zapisany jako słownik zawierający:
-        # nazwę miasta,
-        # odległość,
-        # heurystykę,
-        # wpływ feromonu,
-        # wpływ heurystyki,
-        # wagę
-        rows.append({
-            "city": city,
-            "d": d,
-            "eta": eta,
-            "tau_alpha": tau_alpha,
-            "eta_beta": eta_beta,
-            "weight": weight
-        })
-
-    # sumowanie wag
-    # Liczymy mianownik wzoru na prawdopodobieństwo:  Suma wag wszystkich kandydatów, czyli sumę tau^alpha * eta^beta dla wszystkich miast w zbiorze unvisited.
-    total_weight = sum(r["weight"] for r in rows)
-
-    cumulative = 0.0
-    # obliczanie prawdopodobieństw i sum skumulowanych
-    for r in rows:
-        # Dla każdego miasta liczymy prawdopodobieństwo wyboru:  p = waga / suma wag.  Następnie tworzymy sumę skumulowaną, która będzie używana do wyboru metodą ruletki.
-        r["p"] = r["weight"] / total_weight
-        cumulative += r["p"]
-        # sumę skumulowaną:  cumulative = poprzednia suma + p dla aktualnego miasta. Ta suma skumulowana pozwala nam łatwo wybrać miasto, losując liczbę r i sprawdzając, do którego przedziału należy.
-        r["cumulative"] = cumulative
-
-    return rows
-
-# =========================
-# Koło ruletki
-# Ta funkcja realizuje ostateczny wybór następnego punktu.
-# Losujemy liczbę r∈[0,1) i sprawdzamy, do którego przedziału skumulowanego należy.
-# Każde miasto dostaje przedział długości równej swojemu prawdopodobieństwu.
-# Losowanie wskazuje jeden z tych przedziałów.
-# im większe p,
-# tym większy odcinek na ruletce,
-# tym większa szansa wyboru.
-# Funkcja zwraca:
-# nazwę wybranego miasta,
-# wartość losowania
-# =========================
-def roulette_select(rows):
-    """
-    Wybór miasta metodą koła ruletki.
-    """
-    r = random.random()
-    for row in rows:
-        if r <= row["cumulative"]:
-            return row["city"], r # zwracamy też wylosowaną liczbę dla celów dokumentacyjnych
-    # Teoretycznie suma skumulowana powinna kończyć się dokładnie na 1, ale przez błędy zaokrągleń komputerowych może wyjść np. 0.999999999.
-    # Wtedy wybieramy ostatni element.
-    return rows[-1]["city"], r  # zabezpieczenie numeryczne
-
 def print_step(step_no, current, rows, rand_value, chosen):
     print("=" * 90)
     print(f"KROK {step_no}")
@@ -296,6 +189,8 @@ last_random_value = None
 last_choice = None
 finished = False
 
+history = []
+
 AUTO_STEP_MS = 1800
 last_step_time = pygame.time.get_ticks()
 
@@ -325,17 +220,26 @@ def perform_one_step():
     global current, visited, unvisited, path, total_length
     global step_no, current_rows, last_random_value, last_choice, finished
 
+    global history
+
     if finished:
         return
 
+    current_before = current
+    visited_before = visited.copy()
+    path_before = path.copy()
+    total_length_before = total_length
+    unvisited_before = sorted(list(unvisited))
 
     # Jeżeli zostały jeszcze punkty do odwiedzenia
     if unvisited:
         candidates = sorted(list(unvisited))
-        current_rows = build_probability_table(current, candidates, pheromone=initial_pheromone)
+        current_rows = build_probability_table(points, current, candidates, alpha, beta, pheromone=initial_pheromone)
         chosen, rand_value = roulette_select(current_rows)
 
-        total_length += distance(current, chosen)
+        step_distance = distance(points, current, chosen)
+        total_length += distance(points, current, chosen)
+        #total_length += step_distance
         visited.append(chosen)
         unvisited.remove(chosen)
         path.append(chosen)
@@ -345,10 +249,29 @@ def perform_one_step():
         last_choice = chosen
         step_no += 1
 
+        history.append(
+            StepState(
+                step_no=step_no,
+                current_before=current_before,
+                current_after=current,
+                visited_before=visited_before,
+                visited_after=visited.copy(),
+                unvisited_before=unvisited_before,
+                rows=[...],
+                rand_value=rand_value,
+                chosen=chosen,
+                path_before=path_before,
+                path_after=path.copy(),
+                total_length_before=total_length_before,
+                total_length_after=total_length,
+                step_distance=step_distance,
+            )
+        )
+
     # Jeśli odwiedziliśmy już wszystkie, wracamy do startu
     if not unvisited and not finished:
         if current != start:
-            total_length += distance(current, start)
+            total_length += distance(points, current, start)
             path.append(start)
             last_choice = start
             last_random_value = None
@@ -568,6 +491,8 @@ def draw_info_panel(step_no, current, visited, total_length, rows, rand_value, c
         screen.blit(tiny_font.render(line, True, BLACK), (x, y))
         y += 20
 
+
+
 def main():
     print("Hello, World!")  
     # =========================
@@ -576,7 +501,7 @@ def main():
     global current
     global total_length
     step = 1
-
+    history_index = 0 # do przeglądania historii kroków
     show_help = False
     running = True
     while running:
@@ -593,6 +518,13 @@ def main():
                     last_step_time = now
                 elif event.key == pygame.K_F1:
                     show_help = not show_help
+                # Przegląd stanów algorytmu
+                elif event.key == pygame.K_RIGHT:
+                    history_index = min(history_index + 1, len(history)-1)
+                elif event.key == pygame.K_LEFT:
+                    history_index = max(history_index - 1, 0)
+
+
 
         draw_layout()
         draw_grid()
@@ -631,7 +563,7 @@ def main():
         # wagi,
         # prawdopodobieństwa,
         # sumy skumulowane
-        rows = build_probability_table(current, candidates, pheromone=1.0) #
+        rows = build_probability_table(points, current, candidates, alpha, beta, pheromone=1.0) #
         # wybór metodą ruletki
         # Mrówka podejmuje decyzję na podstawie:
         # tabeli prawdopodobieństw,
@@ -657,7 +589,7 @@ def main():
 
     # Powrót do startu
     # liczona jest odległość z ostatniego punktu do startu,
-    return_distance = distance(current, start)
+    return_distance = distance(points, current, start)
     # odległość ta jest dodawana do całkowitej długości trasy,
     total_length += return_distance
     # start dopisywany jest na końcu listy visited, aby powstał pełny cykl.
