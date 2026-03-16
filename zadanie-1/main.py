@@ -238,8 +238,8 @@ def perform_one_step():
         chosen, rand_value = roulette_select(current_rows)
 
         step_distance = distance(points, current, chosen)
-        total_length += distance(points, current, chosen)
-        #total_length += step_distance
+        #total_length += distance(points, current, chosen)
+        total_length += step_distance
         visited.append(chosen)
         unvisited.remove(chosen)
         path.append(chosen)
@@ -271,13 +271,72 @@ def perform_one_step():
     # Jeśli odwiedziliśmy już wszystkie, wracamy do startu
     if not unvisited and not finished:
         if current != start:
+
+            current_before = current
+            visited_before = visited.copy()
+            path_before = path.copy()
+            total_length_before = total_length
+            unvisited_before = []
+
             total_length += distance(points, current, start)
             path.append(start)
             last_choice = start
             last_random_value = None
             current = start
             current_rows = []
+
+            history.append(
+                StepState(
+                    step_no=step_no,
+                    current_before=current_before,
+                    current_after=current,
+                    visited_before=visited_before,
+                    visited_after=visited.copy(),
+                    unvisited_before=unvisited_before,
+                    rows=[],
+                    rand_value=None,
+                    chosen=start,
+                    path_before=path_before,
+                    path_after=path.copy(),
+                    total_length_before=total_length_before,
+                    total_length_after=total_length,
+                    step_distance=step_distance,
+                )
+            )      
+
         finished = True
+
+def get_display_state(history, history_index):
+    """
+    Zwraca stan do wyświetlenia.
+    history_index = -1 oznacza stan początkowy przed wykonaniem pierwszego kroku.
+    """
+    if history_index < 0 or not history:
+            return {
+                "step_no": 0,
+                "current": start,
+                "visited": [start],
+                "path": [start],
+                "total_length": 0.0,
+                "rows": [],
+                "rand_value": None,
+                "chosen": None,
+                "finished": False,
+            }
+
+    
+    s = history[history_index]
+    return {
+            "step_no": s.step_no,
+            "current": s.current_after,
+            "visited": s.visited_after,
+            "path": s.path_after,
+            "total_length": s.total_length_after,
+            "rows": s.rows,
+            "rand_value": s.rand_value,
+            "chosen": s.chosen,
+            "finished": history_index == len(history) - 1 and finished,
+        }    
 
 def draw_path(path):
     if len(path) < 2:
@@ -491,8 +550,6 @@ def draw_info_panel(step_no, current, visited, total_length, rows, rand_value, c
         screen.blit(tiny_font.render(line, True, BLACK), (x, y))
         y += 20
 
-
-
 def main():
     print("Hello, World!")  
     # =========================
@@ -501,7 +558,7 @@ def main():
     global current
     global total_length
     step = 1
-    history_index = 0 # do przeglądania historii kroków
+    history_index = -1 # do przeglądania historii kroków
     show_help = False
     running = True
     while running:
@@ -513,16 +570,23 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
+                # elif event.key == pygame.K_SPACE:
+                #     perform_one_step()
+                #     last_step_time = now
                 elif event.key == pygame.K_SPACE:
-                    perform_one_step()
-                    last_step_time = now
+                    # wykonaj nowy krok tylko, jeśli oglądasz ostatni stan
+                    if history_index == len(history) - 1:
+                        perform_one_step()
+                        history_index = len(history) - 1
                 elif event.key == pygame.K_F1:
                     show_help = not show_help
                 # Przegląd stanów algorytmu
                 elif event.key == pygame.K_RIGHT:
                     history_index = min(history_index + 1, len(history)-1)
+                    print(f"Przeglądanie historii: krok {history_index+1}/{len(history)}")
                 elif event.key == pygame.K_LEFT:
                     history_index = max(history_index - 1, 0)
+                    print(f"Przeglądanie historii: krok {history_index+1}/{len(history)}")
 
 
 
