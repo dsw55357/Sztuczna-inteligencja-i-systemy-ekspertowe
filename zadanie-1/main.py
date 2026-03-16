@@ -215,6 +215,18 @@ def draw_grid():
     for y in range(MAP_AREA.top, MAP_AREA.bottom, step):
         pygame.draw.line(screen, (111, 235, 111), (MAP_AREA.left, y), (MAP_AREA.right, y), 1)
 
+def convert_rows_to_probability_rows(rows):
+    return [
+        ProbabilityRow(
+            city=r["city"],
+            d=r["d"],
+            eta=r["eta"],
+            weight=r["weight"],
+            p=r["p"],
+            cumulative=r["cumulative"],
+        )
+        for r in rows
+    ]
 
 def perform_one_step():
     global current, visited, unvisited, path, total_length
@@ -257,7 +269,7 @@ def perform_one_step():
                 visited_before=visited_before,
                 visited_after=visited.copy(),
                 unvisited_before=unvisited_before,
-                rows=[...],
+                rows=convert_rows_to_probability_rows(current_rows),
                 rand_value=rand_value,
                 chosen=chosen,
                 path_before=path_before,
@@ -293,7 +305,7 @@ def perform_one_step():
                     visited_before=visited_before,
                     visited_after=visited.copy(),
                     unvisited_before=unvisited_before,
-                    rows=[],
+                    rows=convert_rows_to_probability_rows(current_rows),                   
                     rand_value=None,
                     chosen=start,
                     path_before=path_before,
@@ -323,7 +335,6 @@ def get_display_state(history, history_index):
                 "chosen": None,
                 "finished": False,
             }
-
     
     s = history[history_index]
     return {
@@ -353,12 +364,14 @@ def draw_candidate_edges(current, rows):
 
     p1 = screen_points[current]
     for row in rows:
-        p2 = screen_points[row["city"]]
+        #p2 = screen_points[row["city"]]
+        p2 = screen_points[row.city]
         pygame.draw.line(screen, GRAY, p1, p2, 1)
 
         mx = (p1[0] + p2[0]) // 2
         my = (p1[1] + p2[1]) // 2
-        prob_text = tiny_font.render(f"p={row['p']:.3f}", True, BLACK)
+        #prob_text = tiny_font.render(f"p={row['p']:.3f}", True, BLACK)
+        prob_text = tiny_font.render(f"p={row.p:.3f}", True, BLACK)
         screen.blit(prob_text, (mx + 5, my + 5))
 
 
@@ -460,6 +473,8 @@ def draw_menu():
     lines = [
         "F1     - pokaz / ukryj menu",
         "SPACE  - wykonaj krok",
+        "LEFT   - poprzedni krok historii",
+        "RIGHT  - następny krok historii",
         "ESC    - wyjście",
         "",
         "Legenda:",
@@ -539,14 +554,24 @@ def draw_info_panel(step_no, current, visited, total_length, rows, rand_value, c
     y += 22
 
     for row in rows:
+        # line = (
+        #     f"{row['city']:<5}"
+        #     f"{row['d']:>6.3f}"
+        #     f"{row['eta']:>7.3f}"
+        #     f"{row['weight']:>8.4f}"
+        #     f"{row['p']:>7.3f}"
+        #     f"{row['cumulative']:>7.3f}"
+        # )
+        # korzystamy już ProbabilityRow, więc odwołujemy się do atrybutów, a nie kluczy słownika
         line = (
-            f"{row['city']:<5}"
-            f"{row['d']:>6.3f}"
-            f"{row['eta']:>7.3f}"
-            f"{row['weight']:>8.4f}"
-            f"{row['p']:>7.3f}"
-            f"{row['cumulative']:>7.3f}"
+            f"{row.city:<5}"
+            f"{row.d:>6.3f}"
+            f"{row.eta:>7.3f}"
+            f"{row.weight:>8.4f}"
+            f"{row.p:>7.3f}"
+            f"{row.cumulative:>7.3f}"
         )
+        
         screen.blit(tiny_font.render(line, True, BLACK), (x, y))
         y += 20
 
@@ -588,29 +613,45 @@ def main():
                     history_index = max(history_index - 1, 0)
                     print(f"Przeglądanie historii: krok {history_index+1}/{len(history)}")
 
-
+        display_state = get_display_state(history, history_index)
 
         draw_layout()
         draw_grid()
-        draw_path(path)
-        draw_candidate_edges(current, current_rows)
-        draw_points(visited, current)
-        draw_ant(current)
+
+        # draw_path(path)
+        # draw_candidate_edges(current, current_rows)
+        # draw_points(visited, current)
+        # draw_ant(current)
+        draw_path(display_state["path"])
+        draw_candidate_edges(display_state["current"], display_state["rows"])
+        draw_points(display_state["visited"], display_state["current"])
+        draw_ant(display_state["current"])
 
         if show_help:
             #draw_legend()
             draw_menu()
         
+        # draw_info_panel(
+        #     step_no=step_no,
+        #     current=current,
+        #     visited=visited,
+        #     total_length=total_length,
+        #     rows=current_rows,
+        #     rand_value=last_random_value,
+        #     chosen=last_choice,
+        #     finished=finished
+        # )
+
         draw_info_panel(
-            step_no=step_no,
-            current=current,
-            visited=visited,
-            total_length=total_length,
-            rows=current_rows,
-            rand_value=last_random_value,
-            chosen=last_choice,
-            finished=finished
-        )
+            step_no=display_state["step_no"],
+            current=display_state["current"],
+            visited=display_state["visited"],
+            total_length=display_state["total_length"],
+            rows=display_state["rows"],
+            rand_value=display_state["rand_value"],
+            chosen=display_state["chosen"],
+            finished=display_state["finished"],
+        )        
 
         pygame.display.flip()
         clock.tick(60)
