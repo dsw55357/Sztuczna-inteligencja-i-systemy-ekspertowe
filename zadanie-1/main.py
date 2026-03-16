@@ -175,6 +175,27 @@ def print_step(step_no, current, rows, rand_value, chosen):
     print(f"Wybrano następny punkt: {chosen}")
     print()
 
+def reset_simulation():
+    global current, visited, unvisited, path, total_length
+    global step_no, current_rows, last_random_value, last_choice
+    global finished, history
+
+    current = start
+    visited = [start]
+    unvisited = set(points.keys())
+    unvisited.remove(start)
+
+    path = [start]
+    total_length = 0.0
+    step_no = 1
+
+    current_rows = []
+    last_random_value = None
+    last_choice = None
+    finished = False
+
+    history = []
+
 current = start
 visited = [start] # lista odwiedzonych punktów
 unvisited = set(points.keys()) # zbiór nieodwiedzonych punktów
@@ -183,13 +204,13 @@ unvisited.remove(start) # usuwamy punkt startowy z nieodwiedzonych
 path = [start]
 total_length = 0.0
 step_no = 1
-
 current_rows = []
 last_random_value = None
 last_choice = None
 finished = False
-
 history = []
+
+reset_simulation()
 
 AUTO_STEP_MS = 1800
 last_step_time = pygame.time.get_ticks()
@@ -475,6 +496,7 @@ def draw_menu():
         "SPACE  - wykonaj krok",
         "LEFT   - poprzedni krok historii",
         "RIGHT  - następny krok historii",
+        "R      - restart symulacji",
         "ESC    - wyjście",
         "",
         "Legenda:",
@@ -571,12 +593,11 @@ def draw_info_panel(step_no, current, visited, total_length, rows, rand_value, c
             f"{row.p:>7.3f}"
             f"{row.cumulative:>7.3f}"
         )
-        
+
         screen.blit(tiny_font.render(line, True, BLACK), (x, y))
         y += 20
 
 def main():
-    print("Hello, World!")  
     # =========================
     # Główna logika mrówki
     # =========================
@@ -595,9 +616,9 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-                # elif event.key == pygame.K_SPACE:
-                #     perform_one_step()
-                #     last_step_time = now
+                elif event.key == pygame.K_r:
+                    reset_simulation()
+                    history_index = -1
                 elif event.key == pygame.K_SPACE:
                     # wykonaj nowy krok tylko, jeśli oglądasz ostatni stan
                     if history_index == len(history) - 1:
