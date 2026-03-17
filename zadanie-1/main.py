@@ -540,6 +540,8 @@ def draw_menu():
         y += line_height + line_spacing
 
 def draw_info_panel(step_no, current, visited, total_length, rows, rand_value, chosen, finished):
+    
+    tiny_font_bold = pygame.font.SysFont("consolas", 16, bold=True)
     x = INFO_AREA.left + 15
     y = INFO_AREA.top + 15
 
@@ -576,6 +578,20 @@ def draw_info_panel(step_no, current, visited, total_length, rows, rand_value, c
     y += 22
 
     for row in rows:
+
+        if row.city == chosen:
+            font_used = tiny_font_bold
+            color = RED
+            pygame.draw.rect(
+                screen,
+                (255, 230, 180),
+                pygame.Rect(x-5, y-2, 410, 20)
+            )
+        else:
+            font_used = tiny_font
+            color = BLACK
+        
+
         # line = (
         #     f"{row['city']:<5}"
         #     f"{row['d']:>6.3f}"
@@ -594,7 +610,7 @@ def draw_info_panel(step_no, current, visited, total_length, rows, rand_value, c
             f"{row.cumulative:>7.3f}"
         )
 
-        screen.blit(tiny_font.render(line, True, BLACK), (x, y))
+        screen.blit(font_used.render(line, True, color), (x, y))
         y += 20
 
 def main():
@@ -701,7 +717,7 @@ def main():
 
         # aktualizacja długości trasy
         # Do sumy dokładamy długość nowo przebytego odcinka
-        total_length += distance(current, chosen)
+        total_length += distance(points, current, chosen)
         # aktualizacja list odwiedzin
         # nowy punkt trafia do listy odwiedzonych,
         # znika ze zbioru nieodwiedzonych.   
